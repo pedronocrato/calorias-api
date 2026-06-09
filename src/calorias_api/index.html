@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Controle de Calorias</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0; padding: 0;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 440px;
+      background: white;
+      margin: 40px 0;
+      padding: 24px;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    h1 { text-align: center; color: #333; margin-bottom: 4px; }
+    h2 { margin-top: 28px; color: #555; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      margin-bottom: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+    label { font-size: 12px; color: #888; display: block; margin-top: 4px; }
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: 0.2s;
+      margin-bottom: 6px;
+    }
+    button:hover { background: #45a049; }
+    .btn-blue { background: #2196F3; }
+    .btn-blue:hover { background: #1e88e5; }
+    .output {
+      background: #f1f1f1;
+      padding: 10px;
+      border-radius: 5px;
+      margin-top: 6px;
+      font-size: 14px;
+      min-height: 36px;
+    }
+    .output ul { margin: 0; padding-left: 18px; }
+    .output li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <h1>Controle de Calorias</h1>
+
+  <!-- ===== USUÁRIO ===== -->
+  <h2>1. Cadastrar / Consultar Usuário</h2>
+  <input id="nome"   placeholder="Nome">
+  <div class="row">
+    <div>
+      <label>Peso (kg)</label>
+      <input id="peso"   type="number" placeholder="ex: 70">
+    </div>
+    <div>
+      <label>Altura (m)</label>
+      <input id="altura" type="number" step="0.01" placeholder="ex: 1.75">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>Idade</label>
+      <input id="idade" type="number" placeholder="ex: 25">
+    </div>
+    <div>
+      <label>Sexo</label>
+      <select id="sexo">
+        <option value="">Selecione</option>
+        <option value="M">Masculino</option>
+        <option value="F">Feminino</option>
+      </select>
+    </div>
+  </div>
+  <button onclick="cadastrarUsuario()">Cadastrar Usuário</button>
+  <button class="btn-blue" onclick="consultarUsuario()">Consultar Dados</button>
+  <div id="dadosUsuario" class="output" style="display:none"></div>
+
+  <!-- ===== ALIMENTO ===== -->
+  <h2>2. Registrar Alimento (ganho de calorias)</h2>
+  <input id="alimento"    placeholder="Nome do alimento (ex: rice, chicken breast)">
+  <div class="row">
+    <div>
+      <label>Quantidade (g)</label>
+      <input id="quantidade" type="number" value="100">
+    </div>
+    <div>
+      <label>Data</label>
+      <input id="dataAlimento" type="date">
+    </div>
+  </div>
+  <button onclick="adicionarAlimento()">Registrar Alimento</button>
+
+  <!-- ===== EXERCÍCIO ===== -->
+  <h2>3. Registrar Exercício (perda de calorias)</h2>
+  <input id="nomeExercicio" placeholder="Nome da atividade (ex: running, swimming)">
+  <div class="row">
+    <div>
+      <label>Duração (min)</label>
+      <input id="duracaoExercicio" type="number" value="30">
+    </div>
+    <div>
+      <label>Data</label>
+      <input id="dataExercicio" type="date">
+    </div>
+  </div>
+  <button onclick="adicionarExercicio()">Registrar Exercício</button>
+
+  <!-- ===== SALDO ===== -->
+  <h2>4. Saldo de Calorias</h2>
+  <div class="row">
+    <div>
+      <label>Início (opcional)</label>
+      <input id="saldoInicio" type="date">
+    </div>
+    <div>
+      <label>Fim (opcional)</label>
+      <input id="saldoFim" type="date">
+    </div>
+  </div>
+  <button class="btn-blue" onclick="verSaldo()">Ver Saldo</button>
+  <div id="saldo" class="output"></div>
+
+  <!-- ===== EXTRATO ===== -->
+  <h2>5. Extrato de Transações</h2>
+  <div class="row">
+    <div>
+      <label>Início (opcional)</label>
+      <input id="extratoInicio" type="date">
+    </div>
+    <div>
+      <label>Fim (opcional)</label>
+      <input id="extratoFim" type="date">
+    </div>
+  </div>
+  <button class="btn-blue" onclick="verExtrato()">Ver Extrato</button>
+  <div id="extrato" class="output"></div>
+
+</div>
+
+<script>
+  const BASE = "http://localhost:3000";
+
+  async function cadastrarUsuario() {
+    const dados = {
+      nome:   document.getElementById("nome").value,
+      peso:   parseFloat(document.getElementById("peso").value),
+      altura: parseFloat(document.getElementById("altura").value),
+      idade:  parseInt(document.getElementById("idade").value),
+      sexo:   document.getElementById("sexo").value
+    };
+    const res = await fetch(`${BASE}/usuario`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(dados)
+    });
+    const json = await res.json();
+    alert(json.msg);
+  }
+
+  async function consultarUsuario() {
+    const res  = await fetch(`${BASE}/usuario`);
+    const data = await res.json();
+    const el   = document.getElementById("dadosUsuario");
+    el.style.display = "block";
+    if (!data.usuario) {
+      el.textContent = "Nenhum usuário cadastrado.";
+      return;
+    }
+    const u = data.usuario;
+    el.innerHTML =
+      `<strong>${u.nome}</strong> &mdash; ` +
+      `${u.idade} anos, ${u.peso} kg, ${u.altura} m, ` +
+      `sexo: ${u.sexo === "M" ? "Masculino" : "Feminino"}`;
+  }
+
+  async function adicionarAlimento() {
+    const dados = {
+      nome:       document.getElementById("alimento").value,
+      quantidade: parseFloat(document.getElementById("quantidade").value) || 100,
+      data:       document.getElementById("dataAlimento").value
+    };
+    const res  = await fetch(`${BASE}/alimento`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(dados)
+    });
+    const json = await res.json();
+    alert(json.msg);
+    atualizarTudo();
+  }
+
+  async function adicionarExercicio() {
+    const dados = {
+      nome:    document.getElementById("nomeExercicio").value,
+      duracao: parseInt(document.getElementById("duracaoExercicio").value) || 30,
+      data:    document.getElementById("dataExercicio").value
+    };
+    const res  = await fetch(`${BASE}/exercicio`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(dados)
+    });
+    const json = await res.json();
+    alert(json.msg);
+    atualizarTudo();
+  }
+
+  async function verSaldo() {
+    const inicio = document.getElementById("saldoInicio").value;
+    const fim    = document.getElementById("saldoFim").value;
+    const params = (inicio && fim) ? `?inicio=${inicio}&fim=${fim}` : "";
+    const res    = await fetch(`${BASE}/saldo${params}`);
+    const data   = await res.json();
+    const saldo  = data.saldo;
+    document.getElementById("saldo").innerHTML =
+      `<span style="color:${saldo >= 0 ? 'green' : 'red'}; font-weight:bold">
+        Saldo: ${saldo.toFixed(1)} kcal
+      </span>`;
+  }
+
+  async function verExtrato() {
+    const inicio = document.getElementById("extratoInicio").value;
+    const fim    = document.getElementById("extratoFim").value;
+    const params = (inicio && fim) ? `?inicio=${inicio}&fim=${fim}` : "";
+    const res    = await fetch(`${BASE}/extrato${params}`);
+    const data   = await res.json();
+    const el     = document.getElementById("extrato");
+    if (!data.transacoes || data.transacoes.length === 0) {
+      el.textContent = "Nenhuma transação encontrada.";
+      return;
+    }
+    const itens = data.transacoes.map(t => {
+      const sinal = t.calorias >= 0 ? "+" : "";
+      const icon  = t.tipo === "alimento" ? "🍽️" : "🏃";
+      return `<li>${icon} <strong>${t.data}</strong> — ${t.nome} &nbsp;` +
+             `<span style="color:${t.calorias >= 0 ? 'green' : 'red'}">` +
+             `${sinal}${t.calorias.toFixed(1)} kcal</span></li>`;
+    }).join("");
+    el.innerHTML = `<ul>${itens}</ul>`;
+  }
+
+  function atualizarTudo() {
+    verSaldo();
+    verExtrato();
+  }
+</script>
+</body>
+</html>
