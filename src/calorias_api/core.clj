@@ -9,256 +9,158 @@
             [ring.middleware.json :refer [wrap-json-body]]))
 
 ;; =========================
-;; BANCO DE DADOS (ATOM)
+;; ESTADO (ATOM)
 ;; =========================
 
-(def db
-  (atom {:usuario    {}
-         :transacoes '()}))
+(def db (atom {:usuario {} :transacoes '()}))
 
 ;; =========================
-;; CONFIG APIs EXTERNAS
+;; CHAVES APIs EXTERNAS
 ;; =========================
 
 (def api-key-ninjas "Fh3Jf0IWiNIMdZ7Dda77UJDIQ3sbJAixUxFd3zcE")
 (def api-key-usda   "g81cImnaYz180pDWw2IqfiXHoBGhDN8pMg1xVtKU")
 
 ;; =========================
-;; FUNÇÕES PURAS — VALIDAÇÃO
+;; FUNÇÕES PURAS
 ;; =========================
 
-(defn valida-alimento?
-  "Verifica se o mapa de alimento contem os campos obrigatorios."
-  [a]
-  (and (some? (:nome a))
-       (some? (:quantidade a))
-       (some? (:data a))))
-
-(defn valida-exercicio?
-  "Verifica se o mapa de exercicio contem os campos obrigatorios."
-  [e]
-  (and (some? (:nome e))
-       (some? (:duracao e))
-       (some? (:data e))))
-
-;; =========================
-;; FUNÇÕES PURAS — DOMÍNIO
-;; =========================
-
-(defn- acumular-caloria
-  "Acumula calorias: soma se alimento, subtrai se exercício.
-   Função auxiliar pura usada pelo reduce em calcular-saldo.
-   Aceita tipo como keyword (:alimento) ou string ('alimento')."
-  [total transacao]
-  (let [tipo (:tipo transacao)]
+(defn- acumular [total t]
+  (let [tipo (:tipo t)
+        cal  (or (:calorias t) 0)]
     (if (or (= tipo :alimento) (= tipo "alimento"))
-      (+ total (or (:calorias transacao) 0))
-      (- total (or (:calorias transacao) 0)))))
+      (+ total cal)
+      (- total cal))))
 
 (defn calcular-saldo
-  "Calcula o saldo calórico de uma lista de transações usando reduce (HOF).
-   Função pura — não acessa estado global."
+  "Calcula saldo calórico de uma lista de transações. Usa reduce (HOF)."
   [transacoes]
-  (reduce acumular-caloria 0 transacoes))
+  (reduce acumular 0 transacoes))
 
 (defn filtrar-por-periodo
-  "Filtra transações entre duas datas (strings YYYY-MM-DD).
-   Implementada com recursão de cauda explícita (loop/recur).
-   Função pura — não acessa estado global."
+  "Filtra transações por período. Usa loop/recur (recursão de cauda)."
   [transacoes inicio fim]
-  (loop [restantes transacoes
-         resultado '()]
-    (if (empty? restantes)
+  (loop [xs transacoes resultado '()]
+    (if (empty? xs)
       (reverse resultado)
-      (let [t            (first restantes)
-            no-intervalo (and (>= (compare (:data t) inicio) 0)
-                              (<= (compare (:data t) fim) 0))]
-        (recur (rest restantes)
-               (if no-intervalo (conj resultado t) resultado))))))
+      (let [t (first xs)
+            ok (and (>= (compare (:data t) inicio) 0)
+                    (<= (compare (:data t) fim) 0))]
+        (recur (rest xs) (if ok (conj resultado t) resultado))))))
 
-(defn formatar-transacoes
-  "Formata uma lista de transações para exibição no extrato.
-   Usa map (HOF) para transformar cada mapa de transação.
-   Função pura — não acessa estado global."
-  [transacoes]
-  (map (fn [t]
-         {:data     (:data t)
-          :nome     (:nome t)
-          :tipo     (:tipo t)
-          :calorias (:calorias t)})
-       transacoes))
+(defn formatar [transacoes]
+  "Formata transações para exibição. Usa map (HOF)."
+  (map #(select-keys % [:data :nome :tipo :calorias]) transacoes))
+
+(defn valida-alimento? [a]
+  (and (some? (:nome a)) (some? (:quantidade a)) (some? (:data a))))
+
+(defn valida-exercicio? [e]
+  (and (some? (:nome e)) (some? (:duracao e)) (some? (:data e))))
 
 ;; =========================
-;; FUNÇÕES DE I/O — APIs EXTERNAS
+;; APIs EXTERNAS
 ;; =========================
 
-(defn buscar-calorias-alimento
-  "Consulta a API USDA FoodData Central (gratuita) para obter calorias.
-   Retorna kcal por 100g escalado para a quantidade informada (em gramas)."
-  [nome quantidade]
+(defn calorias-alimento [nome quantidade]
   (try
-    (let [kcal-por-100g (-> (client/get "https://api.nal.usda.gov/fdc/v1/foods/search"
-                                        {:query-params     {"query"    (str/lower-case nome)
-                                                            "pageSize" "1"
-                                                            "api_key"  api-key-usda}
-                                         :throw-exceptions false})
-                            :body
-                            (json/parse-string true)
-                            :foods
-                            first
-                            :foodNutrients
-                            (->> (filter (fn [n] (= (:nutrientName n) "Energy"))))
-                            first
-                            :value)]
-      (* (double (or kcal-por-100g 0))
-         (/ quantidade 100.0)))
+    (let [r (-> (client/get "https://api.nal.usda.gov/fdc/v1/foods/search"
+                            {:query-params {"query" (str/lower-case nome)
+                                            "pageSize" "1"
+                                            "api_key" api-key-usda}
+                             :throw-exceptions false})
+                :body (json/parse-string true)
+                :foods first :foodNutrients
+                (->> (filter #(= (:nutrientName %) "Energy")))
+                first :value)]
+      (* (double (or r 0)) (/ quantidade 100.0)))
     (catch Exception _ 0)))
 
-(defn buscar-calorias-exercicio
-  "Consulta a API Ninjas /v1/caloriesburned para calorias gastas em um exercício.
-   Recebe nome da atividade e duração em minutos. Retorna total de calorias gastas."
-  [nome duracao]
+(defn calorias-exercicio [nome duracao]
   (try
     (-> (client/get "https://api.api-ninjas.com/v1/caloriesburned"
-                    {:headers          {"X-Api-Key" api-key-ninjas}
-                     :query-params     {"activity" (str/lower-case nome)
-                                        "duration" (str duracao)}
+                    {:headers {"X-Api-Key" api-key-ninjas}
+                     :query-params {"activity" (str/lower-case nome)
+                                    "duration" (str duracao)}
                      :throw-exceptions false})
-        :body
-        (json/parse-string true)
-        first
-        :total_calories
-        double)
+        :body (json/parse-string true) first :total_calories double)
     (catch Exception _ 0)))
 
 ;; =========================
-;; FUNÇÕES DE ESTADO (EFEITOS)
+;; ENDPOINTS
 ;; =========================
 
-(defn salvar-usuario!
-  "Registra os dados pessoais do usuário no atom db."
-  [dados]
-  (swap! db assoc :usuario dados))
-
-(defn consultar-usuario
-  "Retorna os dados pessoais do usuário cadastrado."
-  []
-  (:usuario @db))
-
-(defn registrar-alimento!
-  "Obtém as calorias via API USDA e registra a transação de alimento no atom."
-  [dados]
-  (let [calorias  (buscar-calorias-alimento (:nome dados) (:quantidade dados))
-        transacao (merge dados {:tipo :alimento :calorias calorias})]
-    (swap! db update :transacoes conj transacao)
-    transacao))
-
-(defn registrar-exercicio!
-  "Obtém as calorias via API Ninjas e registra a transação de exercício no atom."
-  [dados]
-  (let [calorias  (buscar-calorias-exercicio (:nome dados) (:duracao dados))
-        transacao (merge dados {:tipo :exercicio :calorias calorias})]
-    (swap! db update :transacoes conj transacao)
-    transacao))
-
-;; =========================
-;; HELPERS DE RESPOSTA
-;; =========================
-
-(defn como-json
-  "Monta uma resposta HTTP com body em JSON e status opcional (padrão 200)."
-  [conteudo & [status]]
-  {:status  (or status 200)
+(defn resposta [corpo & [status]]
+  {:status (or status 200)
    :headers {"Content-Type" "application/json; charset=utf-8"}
-   :body    (json/generate-string conteudo)})
+   :body (json/generate-string corpo)})
 
-;; =========================
-;; ENDPOINTS (API REST)
-;; =========================
+(defroutes rotas
 
-(defroutes app-routes
-
-  ;; POST /usuario — Cadastrar dados pessoais
   (POST "/usuario" req
-    (let [body (:body req)
-          dados {:nome   (get body :nome "")
-                 :peso   (double (get body :peso 0))
-                 :altura (double (get body :altura 0))
-                 :idade  (int (get body :idade 0))
-                 :sexo   (str (get body :sexo ""))}]
-      (salvar-usuario! dados)
-      (como-json (consultar-usuario) 201)))
+    (let [b (:body req)
+          u {:nome (get b :nome "") :peso (double (get b :peso 0))
+             :altura (double (get b :altura 0)) :idade (int (get b :idade 0))
+             :sexo (str (get b :sexo ""))}]
+      (swap! db assoc :usuario u)
+      (resposta u 201)))
 
-  ;; GET /usuario — Consultar dados pessoais
   (GET "/usuario" []
-    (como-json (consultar-usuario)))
+    (resposta (:usuario @db)))
 
-  ;; POST /alimento — Registrar consumo de alimento (calorias via API USDA)
   (POST "/alimento" req
-    (if (valida-alimento? (:body req))
-      (como-json (registrar-alimento! (:body req)) 201)
-      (como-json {:mensagem "Dados inválidos"} 422)))
+    (let [b (:body req)]
+      (if (valida-alimento? b)
+        (let [t (merge b {:tipo :alimento :calorias (calorias-alimento (:nome b) (:quantidade b))})]
+          (swap! db update :transacoes conj t)
+          (resposta t 201))
+        (resposta {:mensagem "Dados invalidos"} 422))))
 
-  ;; POST /exercicio — Registrar atividade física (calorias via API Ninjas)
   (POST "/exercicio" req
-    (if (valida-exercicio? (:body req))
-      (como-json (registrar-exercicio! (:body req)) 201)
-      (como-json {:mensagem "Dados inválidos"} 422)))
+    (let [b (:body req)]
+      (if (valida-exercicio? b)
+        (let [t (merge b {:tipo :exercicio :calorias (calorias-exercicio (:nome b) (:duracao b))})]
+          (swap! db update :transacoes conj t)
+          (resposta t 201))
+        (resposta {:mensagem "Dados invalidos"} 422))))
 
-  ;; GET /saldo — Saldo total ou por período (?inicio=YYYY-MM-DD&fim=YYYY-MM-DD)
-  (GET "/saldo" {params :params}
-    (let [inicio (:inicio params)
-          fim    (:fim params)
-          trans  (:transacoes @db)]
-      (como-json {:saldo (if (and inicio fim)
-                           (calcular-saldo (filtrar-por-periodo trans inicio fim))
-                           (calcular-saldo trans))})))
-
-  ;; GET /extrato — Extrato total ou por período (?inicio=YYYY-MM-DD&fim=YYYY-MM-DD)
-  (GET "/extrato" {params :params}
-    (let [inicio (:inicio params)
-          fim    (:fim params)
-          trans  (:transacoes @db)
-          filtradas (if (and inicio fim)
-                      (filtrar-por-periodo trans inicio fim)
+  (GET "/saldo" {p :params}
+    (let [trans (:transacoes @db)
+          filtradas (if (and (:inicio p) (:fim p))
+                      (filtrar-por-periodo trans (:inicio p) (:fim p))
                       trans)]
-      (como-json {:transacoes (formatar-transacoes filtradas)
-                  :saldo      (calcular-saldo filtradas)})))
+      (resposta {:saldo (calcular-saldo filtradas)})))
 
-  (route/not-found
-    (como-json {:mensagem "Recurso não encontrado"} 404)))
+  (GET "/extrato" {p :params}
+    (let [trans (:transacoes @db)
+          filtradas (if (and (:inicio p) (:fim p))
+                      (filtrar-por-periodo trans (:inicio p) (:fim p))
+                      trans)]
+      (resposta {:transacoes (formatar filtradas)
+                 :saldo (calcular-saldo filtradas)})))
+
+  (route/not-found (resposta {:mensagem "Rota nao encontrada"} 404)))
 
 ;; =========================
-;; CORS
+;; CORS + APP + MAIN
 ;; =========================
 
 (defn wrap-cors [handler]
   (fn [req]
     (if (= :options (:request-method req))
-      {:status  200
-       :headers {"Access-Control-Allow-Origin"  "*"
+      {:status 200
+       :headers {"Access-Control-Allow-Origin" "*"
                  "Access-Control-Allow-Headers" "Content-Type"
                  "Access-Control-Allow-Methods" "GET,POST,OPTIONS"}
-       :body    ""}
-      (let [resp (handler req)]
-        (-> resp
-            (assoc-in [:headers "Access-Control-Allow-Origin"]  "*")
+       :body ""}
+      (let [r (handler req)]
+        (-> r
+            (assoc-in [:headers "Access-Control-Allow-Origin"] "*")
             (assoc-in [:headers "Access-Control-Allow-Headers"] "Content-Type")
             (assoc-in [:headers "Access-Control-Allow-Methods"] "GET,POST,OPTIONS"))))))
 
-;; =========================
-;; APP (middlewares)
-;; =========================
+(def app (-> rotas (wrap-json-body {:keywords? true}) wrap-cors))
 
-(def app
-  (-> app-routes
-      (wrap-json-body {:keywords? true})
-      wrap-cors))
-
-;; =========================
-;; MAIN
-;; =========================
-
-(defn -main [& _args]
+(defn -main [& _]
   (println "Servidor rodando em http://localhost:3000")
   (run-jetty app {:port 3000 :join? false}))
