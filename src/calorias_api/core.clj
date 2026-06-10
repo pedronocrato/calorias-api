@@ -6,8 +6,7 @@
             [compojure.core :refer :all]
             [compojure.route :as route]
             [ring.adapter.jetty :refer [run-jetty]]
-            [ring.middleware.json :refer [wrap-json-body]]
-            [ring.middleware.defaults :refer [wrap-defaults api-defaults]]))
+            [ring.middleware.json :refer [wrap-json-body]]))
 
 ;; =========================
 ;; BANCO DE DADOS (ATOM)
@@ -28,33 +27,19 @@
 ;; FUNÇÕES PURAS — VALIDAÇÃO
 ;; =========================
 
-(defn valida-usuario?
-  "Verifica se o mapa de usuário contém os campos obrigatórios com valores válidos."
-  [u]
-  (and (contains? u :peso)
-       (contains? u :altura)
-       (contains? u :idade)
-       (contains? u :sexo)
-       (pos? (:peso u))
-       (pos? (:altura u))))
-
 (defn valida-alimento?
-  "Verifica se o mapa de alimento contém os campos obrigatórios com valores válidos."
+  "Verifica se o mapa de alimento contem os campos obrigatorios."
   [a]
-  (and (contains? a :nome)
-       (contains? a :quantidade)
-       (contains? a :data)
-       (string? (:nome a))
-       (pos? (:quantidade a))))
+  (and (some? (:nome a))
+       (some? (:quantidade a))
+       (some? (:data a))))
 
 (defn valida-exercicio?
-  "Verifica se o mapa de exercício contém os campos obrigatórios com valores válidos."
+  "Verifica se o mapa de exercicio contem os campos obrigatorios."
   [e]
-  (and (contains? e :nome)
-       (contains? e :duracao)
-       (contains? e :data)
-       (string? (:nome e))
-       (pos? (:duracao e))))
+  (and (some? (:nome e))
+       (some? (:duracao e))
+       (some? (:data e))))
 
 ;; =========================
 ;; FUNÇÕES PURAS — DOMÍNIO
@@ -195,10 +180,14 @@
 
   ;; POST /usuario — Cadastrar dados pessoais
   (POST "/usuario" req
-    (if (valida-usuario? (:body req))
-      (do (salvar-usuario! (:body req))
-          (como-json (consultar-usuario) 201))
-      (como-json {:mensagem "Dados inválidos"} 422)))
+    (let [body (:body req)
+          dados {:nome   (get body :nome "")
+                 :peso   (double (get body :peso 0))
+                 :altura (double (get body :altura 0))
+                 :idade  (int (get body :idade 0))
+                 :sexo   (str (get body :sexo ""))}]
+      (salvar-usuario! dados)
+      (como-json (consultar-usuario) 201)))
 
   ;; GET /usuario — Consultar dados pessoais
   (GET "/usuario" []
@@ -263,8 +252,7 @@
 
 (def app
   (-> app-routes
-      (wrap-json-body {:keywords? true :bigdecimals? true})
-      (wrap-defaults api-defaults)
+      (wrap-json-body {:keywords? true})
       wrap-cors))
 
 ;; =========================

@@ -176,7 +176,8 @@
       body: JSON.stringify(dados)
     });
     if (res.ok) {
-      alert("Usuário cadastrado!");
+      alert("Usuario cadastrado!");
+      consultarUsuario();
     } else {
       const json = await res.json();
       alert("Erro: " + (json.mensagem || res.status));
@@ -184,15 +185,14 @@
   }
 
   async function consultarUsuario() {
-    const res  = await fetch(`${BASE}/usuario`);
-    const data = await res.json();
-    const el   = document.getElementById("dadosUsuario");
+    const res = await fetch(`${BASE}/usuario`);
+    const u   = await res.json();
+    const el  = document.getElementById("dadosUsuario");
     el.style.display = "block";
-    if (!data.usuario) {
-      el.textContent = "Nenhum usuário cadastrado.";
+    if (!u || Object.keys(u).length === 0 || !u.nome) {
+      el.textContent = "Nenhum usuario cadastrado.";
       return;
     }
-    const u = data.usuario;
     el.innerHTML =
       `<strong>${u.nome}</strong> &mdash; ` +
       `${u.idade} anos, ${u.peso} kg, ${u.altura} m, ` +
@@ -265,7 +265,7 @@
     }
     const itens = data.transacoes.map(t => {
       const sinal = t.calorias >= 0 ? "+" : "";
-      const icon  = t.tipo === "alimento" ? "🍽️" : "🏃";
+      const icon  = t.tipo === "alimento" ? "[A]" : "[E]";
       return `<li>${icon} <strong>${t.data}</strong> — ${t.nome} &nbsp;` +
              `<span style="color:${t.calorias >= 0 ? 'green' : 'red'}">` +
              `${sinal}${t.calorias.toFixed(1)} kcal</span></li>`;

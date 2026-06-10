@@ -6,7 +6,6 @@
                  [ring/ring-core "1.9.6"]
                  [ring/ring-jetty-adapter "1.9.6"]
                  [ring/ring-json "0.5.1"]
-                 [ring/ring-defaults "0.3.4"]
                  [compojure "1.6.2"]]
   :main ^:skip-aot calorias-api.core
   :target-path "target/%s"
