@@ -175,8 +175,12 @@
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(dados)
     });
-    const json = await res.json();
-    alert(json.msg);
+    if (res.ok) {
+      alert("Usuário cadastrado!");
+    } else {
+      const json = await res.json();
+      alert("Erro: " + (json.mensagem || res.status));
+    }
   }
 
   async function consultarUsuario() {
@@ -201,13 +205,17 @@
       quantidade: parseFloat(document.getElementById("quantidade").value) || 100,
       data:       document.getElementById("dataAlimento").value
     };
-    const res  = await fetch(`${BASE}/alimento`, {
+    const res = await fetch(`${BASE}/alimento`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(dados)
     });
-    const json = await res.json();
-    alert(json.msg);
+    if (res.ok) {
+      alert("Alimento registrado!");
+    } else {
+      const json = await res.json();
+      alert("Erro: " + (json.mensagem || res.status));
+    }
     atualizarTudo();
   }
 
@@ -217,13 +225,17 @@
       duracao: parseInt(document.getElementById("duracaoExercicio").value) || 30,
       data:    document.getElementById("dataExercicio").value
     };
-    const res  = await fetch(`${BASE}/exercicio`, {
+    const res = await fetch(`${BASE}/exercicio`, {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify(dados)
     });
-    const json = await res.json();
-    alert(json.msg);
+    if (res.ok) {
+      alert("Exercício registrado!");
+    } else {
+      const json = await res.json();
+      alert("Erro: " + (json.mensagem || res.status));
+    }
     atualizarTudo();
   }
 
