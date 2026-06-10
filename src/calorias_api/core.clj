@@ -19,7 +19,7 @@
 ;; =========================
 
 (def api-key-ninjas "Fh3Jf0IWiNIMdZ7Dda77UJDIQ3sbJAixUxFd3zcE")
-(def api-key-usda   "g81cImnaYz180pDWw2IqfiXHoBGhDN8pMg1xVtKU")
+(def api-key-usda "ARdUjCgYYmeKzvnTfEcAN5UHqe115b5ADCUoYrVp")
 
 ;; =========================
 ;; FUNÇÕES PURAS
