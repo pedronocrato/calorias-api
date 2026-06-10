@@ -62,11 +62,13 @@
 
 (defn- acumular-caloria
   "Acumula calorias: soma se alimento, subtrai se exercício.
-   Função auxiliar pura usada pelo reduce em calcular-saldo."
+   Função auxiliar pura usada pelo reduce em calcular-saldo.
+   Aceita tipo como keyword (:alimento) ou string ('alimento')."
   [total transacao]
-  (if (= (:tipo transacao) :alimento)
-    (+ total (:calorias transacao))
-    (- total (:calorias transacao))))
+  (let [tipo (:tipo transacao)]
+    (if (or (= tipo :alimento) (= tipo "alimento"))
+      (+ total (or (:calorias transacao) 0))
+      (- total (or (:calorias transacao) 0)))))
 
 (defn calcular-saldo
   "Calcula o saldo calórico de uma lista de transações usando reduce (HOF).
